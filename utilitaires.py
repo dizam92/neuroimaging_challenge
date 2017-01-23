@@ -5,7 +5,13 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
+import pydot
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 import h5py
 
 # ******************************************** Global Values Section ***************************************************
@@ -96,12 +102,26 @@ if __name__ == '__main__':
     test_data, _ = loader(path_file=test_path)
     logger.info('Decisions Trees section')
     x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
-    params = {'criterion': param_Criterion,
-              'max_depth': param_Max_Depth,
-              'min_samples_split': param_Min_Samples_Split}
-    clf = GridSearchCV(estimator=DecisionTreeClassifier(), param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
+    pipe = Pipeline([('scaling', StandardScaler()), ('DT', DecisionTreeClassifier())])
+    params = {'DT__criterion': param_Criterion,
+              'DT__max_depth': param_Max_Depth,
+              'DT__min_samples_split': param_Min_Samples_Split}
+    clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
     clf.fit(x_train, y_train)
     print clf.best_estimator_
     print clf.best_params_
     pred = clf.predict(x_test)
     print {"Metrics": get_metrics(y_test, pred)}
+    print
+    # Print the feature ranking
+    print("Feature ranking:")
+    importances = clf.best_estimator_.named_steps['DT'].feature_importances_
+    indices = np.argsort(importances)[::-1]
+    for f in range(5):
+        print("%d. feature %d (%f) %s" % (f + 1, indices[f], importances[indices[f]], features_names[indices[f]]))
+
+    dot_data = export_graphviz(clf.best_estimator_.named_steps['DT'], out_file=None,
+                               feature_names=features_names, class_names=['HC', 'AD', 'MCI', 'cMCI'],
+                               filled=True, rounded=True, special_characters=True)
+    graph = pydot.graph_from_dot_data(dot_data)
+    graph.write_pdf("mci.pdf")
