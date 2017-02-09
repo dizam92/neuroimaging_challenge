@@ -50,6 +50,22 @@ def get_metrics(y_test, predictions_binary):
                }
     return metrics
 
+def pre_traitement():
+    """ Pré traitement des données """
+    # 1ere idée: Calculer les valeurs, mean, std, max, min, mediane, mode
+    # 2eme idée: faire une PCA
+    # 3eme idée: faire du clustering
+    # 4eme idée: La normalisation est déja prise en compte par le standardScaler
+    # 5eme idée:
+    train_data, label_train, features_names = loader(path_file=train_path)
+    test_data, _ = loader(path_file=test_path)
+    # print features_names
+    # print train_data
+    d = pd.read_csv(train_path)
+    print d
+    # do it for each classe
+    mmse_train_AD = train_data.loc[train_data.Diagnosis == 'AD'].MMSE_bl.values
+
 
 def loader(path_file):
     """ Load the dataset with pandas
@@ -65,11 +81,9 @@ def loader(path_file):
         # Stats section
         nb_classes = np.unique(y)
         print 'il y a {} classes'.format(nb_classes)
-        for cls in nb_classes:
-            cls_indexes.append(d.loc[d.Diagnosis == cls].index.values)
-            print 'il y a {} patients dans la classe {}'.format(d.loc[d.Diagnosis == cls].values.shape[0], cls)
-            # commentaires: il y a le meme nombre pour chaque classe! Interessant. On peut faire de la classif binaire
-            # par catégorie en mode one_vs_one/ puis faire du one_vs_all
+        # for cls in nb_classes:
+        #     cls_indexes.append(d.loc[d.Diagnosis == cls].index.values)
+        #     print 'il y a {} patients dans la classe {}'.format(d.loc[d.Diagnosis == cls].values.shape[0], cls)
         # replace the gender by binary class
         d['GENDER'].replace(to_replace={'Female': 1, 'Male': 0}, inplace=True)
         # delete unnecessary columns
@@ -97,7 +111,7 @@ def loader(path_file):
         # f.create_dataset('features', data=features_names)
         return d.values, features_names
 
-if __name__ == '__main__':
+def dt_experiences():
     train_data, label_train, features_names = loader(path_file=train_path)
     test_data, _ = loader(path_file=test_path)
     logger.info('Decisions Trees section')
@@ -125,3 +139,7 @@ if __name__ == '__main__':
                                filled=True, rounded=True, special_characters=True)
     graph = pydot.graph_from_dot_data(dot_data)
     graph.write_pdf("mci.pdf")
+
+if __name__ == '__main__':
+    pre_traitement()
+
