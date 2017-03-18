@@ -15,13 +15,9 @@ test = test.drop(['SUB_ID', 'GENDER'], axis=1)
 # datas[1] ne contient plus les 3 rangees outliers
 datas = (data, data.drop([17, 152, 203], axis=0))
 
-i = 0
-
-for dataset in datas:
+for i, dataset in enumerate(datas):
     data_diagnostic = dataset['Diagnosis']
     data = dataset.drop(['SUB_ID','Diagnosis','GENDER'], axis=1)
-
-
     pcaobj = PCA(n_components=3)
     new_data = pcaobj.fit_transform(data)
     #print np.sum(pcaobj.explained_variance_ratio_)
@@ -29,7 +25,11 @@ for dataset in datas:
     plt.scatter(new_data[:,0], new_data[:,1], c=data_diagnostic)
     plt.xlabel('Comp1')
     plt.ylabel('Comp2')
-    plt.show()
+    # plt.show()
+    if i == 0:
+        plt.savefig('pca_on_dataset_without_outliers.png')
+    else:
+        plt.savefig('pca_on_dataset_with_outliers.png')
 
 new_test = pcaobj.transform(test)
 
@@ -42,6 +42,6 @@ ax.set_xlim([-0.15e7,0.15e7])
 ax.set_ylim([-0.15e7,0.15e7])
 ax.set_zlim([-0.15e7,0.15e7])
 
-plt.show()
-
+# plt.show()
+plt.savefig('pca_on_test.png')
 np.savetxt("newdata.csv", X=new_data, delimiter=",")

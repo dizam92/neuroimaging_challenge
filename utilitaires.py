@@ -4,10 +4,16 @@ __author__ = 'maoss2'
 import logging
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split, GridSearchCV, KFold
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import confusion_matrix
+from sklearn.multiclass import OneVsOneClassifier
+from sklearn.svm import LinearSVC
+from copy import deepcopy
 import pydot
 import os
 import matplotlib.pyplot as plt
@@ -18,12 +24,15 @@ import h5py
 logging.basicConfig(level=logging.INFO)
 train_path = 'datasets/train.csv'
 test_path = 'datasets/test.csv'
-param_Max_Depth = np.arange(1, 15, 2)
-param_Min_Samples_Split = np.arange(2, 8)
+param_Max_Depth = np.arange(1, 15, 1)
+param_Min_Samples_Split = np.arange(2, 10)
 param_Criterion = ["gini", "entropy"]
+param_C = np.logspace(-6, 6, 20)
+param_Gamma = np.logspace(-5, 2, 10)
+param_Degree = [3, 4, 6, 7, 8]
 logger = logging.getLogger(__name__)
-n_cv = 5
-n_jobs = 8
+n_cv = KFold(n_splits=5, random_state=42)
+n_jobs = 5
 # **********************************************************************************************************************
 def get_metrics(y_test, predictions_binary):
     """Compute the metrics for classifiers predictors
@@ -74,28 +83,21 @@ def loader(path_file):
 
     if path_file.find('train') != -1:
         dropped_labels = ['SUB_ID', 'Diagnosis']
-        cls_indexes = []
         d = pd.read_csv(path_file)
         d['Diagnosis'].replace(to_replace={'HC': 0, 'AD': 1, 'MCI': 2, 'cMCI': 3}, inplace=True)
+        y_without_outliers = deepcopy(d['Diagnosis'])
         y = d['Diagnosis'].values
         # Stats section
         nb_classes = np.unique(y)
         print 'il y a {} classes'.format(nb_classes)
-        # for cls in nb_classes:
-        #     cls_indexes.append(d.loc[d.Diagnosis == cls].index.values)
-        #     print 'il y a {} patients dans la classe {}'.format(d.loc[d.Diagnosis == cls].values.shape[0], cls)
-        # replace the gender by binary class
         d['GENDER'].replace(to_replace={'Female': 1, 'Male': 0}, inplace=True)
         # delete unnecessary columns
         d.drop(dropped_labels, axis=1, inplace=True)
         # features
         features_names = d.columns.values
-        # build the dataset
-        # f = h5py.File('dataset_complet', 'w')
-        # f.create_dataset('data', data=d.values)
-        # f.create_dataset('target', data=y)
-        # f.create_dataset('features', data=features_names)
-        return d.values, y, features_names
+        d_without_outliers = deepcopy(d.drop([17, 152, 203], axis=0))
+        y_without_outliers.drop([17, 152, 203], axis=0, inplace=True)
+        return d.values, y, d_without_outliers.values, y_without_outliers.values, features_names
     else:
         dropped_labels = ['SUB_ID']
         d = pd.read_csv(path_file)
@@ -109,29 +111,36 @@ def loader(path_file):
         # f = h5py.File('dataset_complet', 'w')
         # f.create_dataset('data', data=d.values)
         # f.create_dataset('features', data=features_names)
-        return d.values, features_names
+        d_without_outliers = deepcopy(d.drop([17, 152, 203], axis=0))
+        return d.values, d_without_outliers.values, features_names
 
 def dt_experiences():
-    train_data, label_train, features_names = loader(path_file=train_path)
-    test_data, _ = loader(path_file=test_path)
+    train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
+    test_data_original, test_data, _ = loader(path_file=test_path)
     logger.info('Decisions Trees section')
     x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
-    pipe = Pipeline([('scaling', StandardScaler()), ('DT', DecisionTreeClassifier())])
+    # pipe = Pipeline([('scaling', StandardScaler()), ('DT', DecisionTreeClassifier())])
+    pipe = Pipeline([('scaling', MinMaxScaler()), ('DT', DecisionTreeClassifier())])
     params = {'DT__criterion': param_Criterion,
               'DT__max_depth': param_Max_Depth,
               'DT__min_samples_split': param_Min_Samples_Split}
+
     clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
     clf.fit(x_train, y_train)
+    # clf.fit(train_data, label_train)
     print clf.best_estimator_
     print clf.best_params_
+    pred = clf.predict(train_data)
+    print {"Train Metrics": get_metrics(label_train, pred)}
     pred = clf.predict(x_test)
-    print {"Metrics": get_metrics(y_test, pred)}
+    print {"Test Metrics": get_metrics(y_test, pred)}
+    cnf_matrix = confusion_matrix(y_test, pred)
+    print cnf_matrix
     print
-    # Print the feature ranking
     print("Feature ranking:")
     importances = clf.best_estimator_.named_steps['DT'].feature_importances_
     indices = np.argsort(importances)[::-1]
-    for f in range(5):
+    for f in range(10):
         print("%d. feature %d (%f) %s" % (f + 1, indices[f], importances[indices[f]], features_names[indices[f]]))
 
     dot_data = export_graphviz(clf.best_estimator_.named_steps['DT'], out_file=None,
@@ -140,6 +149,79 @@ def dt_experiences():
     graph = pydot.graph_from_dot_data(dot_data)
     graph.write_pdf("mci.pdf")
 
+
+def random_forest_experiences():
+    train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
+    test_data_original, test_data, _ = loader(path_file=test_path)
+    logger.info('Random Forest section')
+    x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
+    # pipe = Pipeline([('scaling', StandardScaler()), ('DT', RandomForestClassifier(n_estimators=250, random_state=42))])
+    pipe = Pipeline([('scaling', MinMaxScaler()), ('DT', RandomForestClassifier(n_estimators=250, random_state=42))])
+    params = {'DT__criterion': param_Criterion,
+              'DT__max_depth': param_Max_Depth,
+              'DT__min_samples_split': param_Min_Samples_Split}
+    clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
+    clf.fit(x_train, y_train)
+    print clf.best_estimator_
+    print clf.best_params_
+    pred = clf.predict(train_data)
+    print {"Train Metrics": get_metrics(label_train, pred)}
+    pred = clf.predict(x_test)
+    print {"Test Metrics": get_metrics(y_test, pred)}
+    print
+    cnf_matrix = confusion_matrix(y_test, pred)
+    print cnf_matrix
+    print("Feature ranking:")
+    importances = clf.best_estimator_.named_steps['DT'].feature_importances_
+    indices = np.argsort(importances)[::-1]
+    for f in range(20):
+        print("%d. feature %d (%f) %s" % (f + 1, indices[f], importances[indices[f]], features_names[indices[f]]))
+
+def svm_multiclasses_experiences():
+    train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
+    test_data_original, test_data, _ = loader(path_file=test_path)
+    logger.info('SVM multiclasses section')
+    x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
+    pipe = Pipeline([('scaling', StandardScaler()), ('SVM', SVC(kernel='rbf', random_state=42))])
+    params = {# 'SVM__kernel': param_Criterion,
+              'SVM__C': param_C,
+                # 'SVM__degree': param_Degree ,
+              'SVM__gamma': param_Gamma
+            }
+    clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
+    clf.fit(x_train, y_train)
+    print clf.best_estimator_
+    print clf.best_params_
+    pred = clf.predict(train_data)
+    print {"Train Metrics": get_metrics(label_train, pred)}
+    pred = clf.predict(x_test)
+    print {"Test Metrics": get_metrics(y_test, pred)}
+    cnf_matrix = confusion_matrix(y_test, pred)
+    print cnf_matrix
+
+def oneVSone():
+    train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
+    test_data_original, test_data, _ = loader(path_file=test_path)
+    logger.info('OVo multiclasses section')
+    x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
+    pipe = Pipeline([('scaling', StandardScaler()), ('ovo', OneVsOneClassifier(estimator=LinearSVC(random_state=42)))])
+    params = {'ovo__estimator__C': param_C
+    }
+    clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
+    clf.fit(x_train, y_train)
+    print clf.best_estimator_
+    print clf.best_params_
+    pred = clf.predict(train_data)
+    print {"Train Metrics": get_metrics(label_train, pred)}
+    pred = clf.predict(x_test)
+    print {"Test Metrics": get_metrics(y_test, pred)}
+    cnf_matrix = confusion_matrix(y_test, pred)
+    print cnf_matrix
+
 if __name__ == '__main__':
-    pre_traitement()
+    oneVSone()
+    svm_multiclasses_experiences()
+    dt_experiences()
+    random_forest_experiences()
+
 
