@@ -32,15 +32,15 @@ from copy import deepcopy
 logging.basicConfig(level=logging.INFO)
 train_path = 'datasets/train.csv'
 test_path = 'datasets/test.csv'
-param_Max_Depth = np.arange(1, 15, 1)
-param_Min_Samples_Split = np.arange(2, 10)
+param_Max_Depth = np.arange(1, 10, 1)
+param_Min_Samples_Split = np.arange(2, 8)
 param_Criterion = ["gini", "entropy"]
 param_C = np.logspace(-6, 6, 20)
 param_Gamma = np.logspace(-5, 2, 10)
 param_Degree = [3, 4, 6, 7, 8]
 logger = logging.getLogger(__name__)
 n_cv = KFold(n_splits=5, random_state=42)
-n_jobs = 5
+n_jobs = 8
 # **********************************************************************************************************************
 def get_metrics(y_test, predictions_binary):
     """Compute the metrics for classifiers predictors
@@ -211,32 +211,49 @@ def final_submission():
 
 # def random_forest_experiences():
 #     train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
-#     test_data, test_ids,_ = loader(path_file=test_path)
-#     logger.info('Random Forest section')
-#     x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
-#     # pipe = Pipeline([('scaling', StandardScaler()), ('DT', RandomForestClassifier(n_estimators=250, random_state=42))])
+#     test_data, test_ids, _, y_true = loader(path_file=test_path)
+#     logger.info('Decisions Trees section')
 #     pipe = Pipeline([('scaling', MinMaxScaler()), ('DT', RandomForestClassifier(n_estimators=10, random_state=42))])
 #     params = {'DT__criterion': param_Criterion,
-#               'DT__max_depth': param_Max_Depth,
-#               'DT__min_samples_split': param_Min_Samples_Split,
-#               'DT__n_estimators': [50, 100, 150, 200]}
+#                   'DT__max_depth': param_Max_Depth,
+#                   'DT__min_samples_split': param_Min_Samples_Split,
+#                   'DT__n_estimators': [1000, 2000]}
 #     clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
-#     clf.fit(x_train, y_train)
-#     print clf.best_estimator_
-#     print clf.best_params_
-#     pred = clf.predict(train_data)
-#     print {"Train Metrics": get_metrics(label_train, pred)}
-#     pred = clf.predict(x_test)
-#     print {"Test Metrics": get_metrics(y_test, pred)}
-#     print
-#     cnf_matrix = confusion_matrix(y_test, pred)
-#     print cnf_matrix
+#
+#     clf.fit(train_data, label_train)
+#     # construire l'arbre de décision ici:
 #     print("Feature ranking:")
 #     importances = clf.best_estimator_.named_steps['DT'].feature_importances_
 #     indices = np.argsort(importances)[::-1]
 #     for f in range(20):
 #         print("%d. feature %d (%f) %s" % (f + 1, indices[f], importances[indices[f]], features_names[indices[f]]))
 #
+#     # dot_data = export_graphviz(clf.best_estimator_.named_steps['DT'], out_file=None,
+#     #                            feature_names=features_names, class_names=['HC', 'AD', 'MCI', 'cMCI'],
+#     #                            filled=True, rounded=True, special_characters=True)
+#     # graph = pydot.graph_from_dot_data(dot_data)
+#     # graph.write_pdf("mci.pdf")
+#     print clf.best_estimator_
+#     train_pred = clf.predict(train_data)
+#     print {"Train Metrics": get_metrics(label_train, train_pred)}
+#     pred = clf.predict(test_data.values)
+#     print {"Real Test Metrics": get_metrics(y_true, pred)}
+#     cnf_matrix = confusion_matrix(y_true, pred)
+#     print cnf_matrix
+    # # 'HC': 0, 'AD': 1, 'MCI': 2, 'cMCI': 3
+    # with open('sample_submission.csv', 'w') as f:
+    #     f.write('SUB_ID,Diagnosis\n')
+    #     for i, el in enumerate(pred):
+    #         if el == 0:
+    #             f.write('{},HC\n'.format(test_ids[i]))
+    #         if el == 1:
+    #             f.write('{},AD\n'.format(test_ids[i]))
+    #         if el == 2:
+    #             f.write('{},MCI\n'.format(test_ids[i]))
+    #         if el == 3:
+    #             f.write('{},cMCI\n'.format(test_ids[i]))
+
+
 # def svm_multiclasses_experiences_rbf():
 #     train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
 #     test_data_original, test_data, _ = loader(path_file=test_path)
@@ -373,5 +390,3 @@ if __name__ == '__main__':
     # dt_experiences()
     # random_forest_experiences()
     final_submission()
-
-
