@@ -123,7 +123,8 @@ def dt_experiences():
               'DT__min_samples_split': param_Min_Samples_Split}
 
     clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
-    clf.fit(train_data, label_train)
+    # clf.fit(train_data, label_train)
+    clf.fit(train_data_original, label_train_original)
     print clf.best_estimator_
     print clf.best_params_
     pred = clf.predict(train_data)
