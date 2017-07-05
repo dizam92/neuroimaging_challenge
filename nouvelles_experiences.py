@@ -116,7 +116,7 @@ def dt_experiences():
     test_data, test_ids, _, y_true = loader(path_file=test_path)
     logger.info('Decisions Trees section')
     # x_train, x_test, y_train, y_test = train_test_split(train_data, label_train, train_size=0.8, random_state=42)
-    # pipe = Pipeline([('scaling', StandardScaler()), ('DT', DecisionTreeClassifier())])
+    # pipe = Pipeline([('scaling', StandardScaler()), ('DT', DecisionTreeClassifier(random_state=42))])
     pipe = Pipeline([('scaling', MinMaxScaler()), ('DT', DecisionTreeClassifier(random_state=42))])
     params = {'DT__criterion': param_Criterion,
               'DT__max_depth': param_Max_Depth,
@@ -204,5 +204,34 @@ def fourVSall():
     graph = pydot.graph_from_dot_data(dot_data)
     graph.write_pdf("new_mci_dt_four_vs_all.pdf")
 
+def random_forest_experiences():
+    train_data_original, label_train_original, train_data, label_train, features_names = loader(path_file=train_path)
+    test_data, test_ids, _, y_true = loader(path_file=test_path)
+    logger.info('Decisions Trees section')
+    pipe = Pipeline([('scaling', MinMaxScaler()), ('DT', RandomForestClassifier(n_estimators=10, random_state=42))])
+    params = {'DT__criterion': param_Criterion,
+              'DT__max_depth': param_Max_Depth,
+              'DT__min_samples_split': param_Min_Samples_Split,
+              'DT__n_estimators': [1000]}
+    clf = GridSearchCV(pipe, param_grid=params, cv=n_cv, n_jobs=n_jobs, verbose=1)
+
+    clf.fit(train_data, label_train)
+    # construire l'arbre de décision ici:
+    print("Feature ranking:")
+    importances = clf.best_estimator_.named_steps['DT'].feature_importances_
+    indices = np.argsort(importances)[::-1]
+    for f in range(20):
+        print("%d. feature %d (%f) %s" % (f + 1, indices[f], importances[indices[f]], features_names[indices[f]]))
+
+    print clf.best_estimator_
+    train_pred = clf.predict(train_data)
+    print {"Train Metrics": get_metrics(label_train, train_pred)}
+    pred = clf.predict(test_data.values)
+    print {"Real Test Metrics": get_metrics(y_true, pred)}
+    cnf_matrix = confusion_matrix(y_true, pred)
+    print cnf_matrix
+
+
 if __name__ == '__main__':
+    # random_forest_experiences()
     dt_experiences()
